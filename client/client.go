@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	pb "ruspro/api"
+	"ruspro/internal/logging"
 
 	"google.golang.org/grpc"
 )
@@ -14,7 +14,7 @@ import (
 func main() {
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("Не удалось установить соединение с сервером: %v", err)
+		logging.Log.Fatalf("Не удалось установить соединение с сервером: %v", err)
 	}
 	defer conn.Close()
 
@@ -30,7 +30,7 @@ func main() {
 
 	resp, err := client.GetCompanyInfo(ctx, req)
 	if err != nil {
-		log.Fatalf("Ошибка при вызове метода GetCompanyInfo: %v", err)
+		logging.Log.Fatalf("Ошибка при вызове метода GetCompanyInfo: %v", err)
 	}
 
 	fmt.Printf("ИНН: %s\n", resp.GetInn())

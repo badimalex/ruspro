@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	pb "ruspro/api"
+	"ruspro/internal/logging"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -15,12 +16,16 @@ type Server struct {
 }
 
 func (s *Server) GetCompanyInfo(ctx context.Context, req *pb.CompanyRequest) (*pb.CompanyResponse, error) {
+	logging.Log.Info("Start fetching GetCompanyInfo")
+
 	if req.Inn == "" {
+		logging.Log.Error("failed to fetching INN")
 		return nil, fmt.Errorf("INN is required")
 	}
 
 	response, err := queryRusProfile(req.Inn)
 	if err != nil {
+		logging.Log.Error("failed to query Profile")
 		return nil, err
 	}
 
@@ -28,32 +33,40 @@ func (s *Server) GetCompanyInfo(ctx context.Context, req *pb.CompanyRequest) (*p
 }
 
 func queryRusProfile(inn string) (*pb.CompanyResponse, error) {
+	if !isValidINN(inn) {
+		logging.Log.Error("INN is not valid")
+		return nil, fmt.Errorf("некорректный ИНН")
+	}
+
 	url := "https://www.rusprofile.ru/search?query=" + inn + "&type=ul"
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, err
+		logging.Log.Error("error query to server rusprofile")
+		return nil, fmt.Errorf("ошибка запроса к RusProfile: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status code error: %d %s", resp.StatusCode, resp.Status)
+		logging.Log.Error("api rusprofile is not working")
+		return nil, fmt.Errorf("сервис RusProfile недоступен, код ответа: %d", resp.StatusCode)
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
-
 	if err != nil {
-		return nil, err
+		logging.Log.Error("error parse body")
+		return nil, fmt.Errorf("ошибка при чтении ответа: %v", err)
 	}
 
 	kpp := doc.Find("#clip_kpp").Text()
-
 	companyName := doc.Find(".company-name").Text()
-
 	ceoName := doc.Find(".company-info__text a.link-arrow").Text()
 
 	if companyName == "" || kpp == "" || ceoName == "" {
-		return nil, fmt.Errorf("information not found")
+		logging.Log.Error("company not found")
+		return nil, fmt.Errorf("компания не найдена")
 	}
+
+	logging.Log.Info("Success company fetching")
 
 	return &pb.CompanyResponse{
 		Inn:  strings.TrimSpace(inn),
