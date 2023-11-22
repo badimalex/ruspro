@@ -12,6 +12,7 @@ import (
 )
 
 type Server struct {
+	ApiUrl string
 	pb.UnimplementedRusProfileServiceServer
 }
 
@@ -23,7 +24,7 @@ func (s *Server) GetCompanyInfo(ctx context.Context, req *pb.CompanyRequest) (*p
 		return nil, fmt.Errorf("INN is required")
 	}
 
-	response, err := queryRusProfile(req.Inn)
+	response, err := queryRusProfile(req.Inn, s.ApiUrl)
 	if err != nil {
 		logging.Log.Error("failed to query Profile")
 		return nil, err
@@ -32,13 +33,15 @@ func (s *Server) GetCompanyInfo(ctx context.Context, req *pb.CompanyRequest) (*p
 	return response, nil
 }
 
-func queryRusProfile(inn string) (*pb.CompanyResponse, error) {
+func queryRusProfile(inn, apiUrl string) (*pb.CompanyResponse, error) {
 	if !isValidINN(inn) {
 		logging.Log.Error("INN is not valid")
 		return nil, fmt.Errorf("некорректный ИНН")
 	}
 
-	url := "https://www.rusprofile.ru/search?query=" + inn + "&type=ul"
+	url := strings.ReplaceAll(apiUrl, "{{inn}}", inn)
+	logging.Log.Infof("query fetching rusprofile url %s", url)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		logging.Log.Error("error query to server rusprofile")

@@ -11,22 +11,25 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
-func startGRPCServer() {
-	lis, err := net.Listen("tcp", ":50051")
+func startGRPCServer(rusprofileAPIURL, grpcServerAddress string) {
+	lis, err := net.Listen("tcp", grpcServerAddress)
 	if err != nil {
 		logging.Log.Fatalf("Failed to listen for gRPC server: %v", err)
 	}
 	grpcServer := grpc.NewServer()
-	pb.RegisterRusProfileServiceServer(grpcServer, &server.Server{})
-	logging.Log.Info("gRPC server started on :50051")
+	pb.RegisterRusProfileServiceServer(grpcServer, &server.Server{ApiUrl: rusprofileAPIURL})
+	logging.Log.Infof("gRPC server started on %s", grpcServerAddress)
 	if err := grpcServer.Serve(lis); err != nil {
 		logging.Log.Fatalf("failed to serve gRPC server: %v", err)
 	}
 }
 
-func startHTTPServer() {
+func startHTTPServer(grpcServerAddress, httpServerAddress string) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -35,7 +38,7 @@ func startHTTPServer() {
 	httpMux := http.NewServeMux()
 	httpMux.Handle("/", mux)
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	err := pb.RegisterRusProfileServiceHandlerFromEndpoint(ctx, mux, "localhost:50051", opts)
+	err := pb.RegisterRusProfileServiceHandlerFromEndpoint(ctx, mux, "localhost"+grpcServerAddress, opts)
 	if err != nil {
 		logging.Log.Fatalf("failed to register gateway: %v", err)
 	}
@@ -45,11 +48,11 @@ func startHTTPServer() {
 	httpMux.Handle("/swaggerui/", http.StripPrefix("/swaggerui/", http.FileServer(http.Dir("swaggerui"))))
 
 	gwServer := &http.Server{
-		Addr:    ":8080",
+		Addr:    httpServerAddress,
 		Handler: httpMux,
 	}
 
-	logging.Log.Printf("HTTP server started on :8080")
+	logging.Log.Printf("HTTP server started on :%s", httpServerAddress)
 	logging.Log.Fatal(gwServer.ListenAndServe())
 }
 
@@ -59,7 +62,22 @@ func serveSwagger(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	var configFile string
+	pflag.StringVar(&configFile, "config", "config.yaml", "Path to configuration file")
+
+	pflag.Parse()
+
+	viper.SetConfigFile(configFile)
+	if err := viper.ReadInConfig(); err != nil {
+		logging.Log.Fatalf("Failed to read config file: %v", err)
+	}
+
+	// Чтение настроек из viper
+	grpcServerAddress := viper.GetString("grpc_server_address")
+	httpServerAddress := viper.GetString("http_server_address")
+	rusprofileAPIURL := viper.GetString("rusprofile_api_url")
+
 	logging.InitLogger()
-	go startGRPCServer()
-	startHTTPServer()
+	go startGRPCServer(rusprofileAPIURL, grpcServerAddress)
+	startHTTPServer(grpcServerAddress, httpServerAddress)
 }
