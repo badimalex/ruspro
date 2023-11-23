@@ -62,6 +62,8 @@ func serveSwagger(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	logging.InitLogger()
+
 	var configFile string
 	pflag.StringVar(&configFile, "config", "config.yaml", "Path to configuration file")
 
@@ -72,12 +74,10 @@ func main() {
 		logging.Log.Fatalf("Failed to read config file: %v", err)
 	}
 
-	// Чтение настроек из viper
 	grpcServerAddress := viper.GetString("grpc_server_address")
 	httpServerAddress := viper.GetString("http_server_address")
 	rusprofileAPIURL := viper.GetString("rusprofile_api_url")
 
-	logging.InitLogger()
 	go startGRPCServer(rusprofileAPIURL, grpcServerAddress)
 	startHTTPServer(grpcServerAddress, httpServerAddress)
 }
